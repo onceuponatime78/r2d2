@@ -23,6 +23,11 @@ web/backend/static/
 *.swp
 *.swo
 
+# Go binary outputs
+/r2d2
+/r2d2.exe
+/dist/
+
 # Secrets / local state
 scripts/.r2d2_uuid
 
