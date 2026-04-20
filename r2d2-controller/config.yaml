@@ -3,6 +3,7 @@ description: "Web control interface for the DeAgostini R2-D2 Astromech droid"
 version: "1.1.0"
 slug: "r2d2-controller"
 url: "https://github.com/onceuponatime78/r2d2"
+image: "ghcr.io/onceuponatime78/r2d2-addon-{arch}"
 arch:
   - amd64
   - aarch64

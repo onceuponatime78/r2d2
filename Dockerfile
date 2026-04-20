@@ -14,7 +14,7 @@ RUN CGO_ENABLED=0 go build -o /app/r2d2 .
 
 FROM ${BUILD_FROM}
 COPY --from=go-builder /app/r2d2 /usr/bin/r2d2
-COPY run.sh /
+COPY r2d2-controller/run.sh /
 RUN chmod a+x /run.sh /usr/bin/r2d2
 
 CMD [ "/run.sh" ]
