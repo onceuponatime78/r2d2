@@ -15,7 +15,7 @@ interface UseRobotReturn {
   state: Partial<RobotState>
   send: (message: string) => void
   /** Send a command and wait for a matching response (by cmd name). */
-  sendRequest: (message: string) => Promise<Record<string, unknown> | null>
+  sendRequest: (message: string, timeoutMs?: number) => Promise<Record<string, unknown> | null>
   /** Connect using an optional override IP (falls back to `ip` prop). */
   connect: (overrideIp?: string, overrideUuid?: string) => void
   disconnect: () => void
@@ -105,7 +105,7 @@ export function useRobot({ ip, uuid, deviceName = "R2D2-WebUI", onLog }: UseRobo
     }
   }, [])
 
-  const sendRequest = useCallback((message: string): Promise<Record<string, unknown> | null> => {
+  const sendRequest = useCallback((message: string, timeoutMs = 10000): Promise<Record<string, unknown> | null> => {
     return new Promise((resolve) => {
       if (wsRef.current?.readyState !== WebSocket.OPEN) {
         log("sendRequest() dropped — socket not open", "warn")
@@ -116,12 +116,11 @@ export function useRobot({ ip, uuid, deviceName = "R2D2-WebUI", onLog }: UseRobo
       try {
         const parsed = JSON.parse(message.trim())
         const cmdName = parsed.cmd as string
-        log(`>>> request: ${cmdName}`)
-        // Timeout after 10s
+        log(`>>> request: ${cmdName} (timeout ${timeoutMs / 1000}s)`)
         const timer = setTimeout(() => {
           pendingRef.current.delete(cmdName)
           resolve(null)
-        }, 10000)
+        }, timeoutMs)
         pendingRef.current.set(cmdName, (data) => {
           clearTimeout(timer)
           pendingRef.current.delete(cmdName)

@@ -1,12 +1,14 @@
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { cmd } from "@/lib/protocol"
 import type { WifiNetwork } from "@/lib/protocol"
+
+const SCAN_TIMEOUT_MS = 45000
 
 interface Props {
   open: boolean
   onClose: () => void
   currentSSID?: string
-  sendRequest: (msg: string) => Promise<Record<string, unknown> | null>
+  sendRequest: (msg: string, timeoutMs?: number) => Promise<Record<string, unknown> | null>
 }
 
 export function WifiManager({ open, onClose, currentSSID, sendRequest }: Props) {
@@ -16,11 +18,24 @@ export function WifiManager({ open, onClose, currentSSID, sendRequest }: Props) 
   const [connectSSID, setConnectSSID] = useState<string | null>(null)
   const [password, setPassword] = useState("")
   const [result, setResult] = useState<string | null>(null)
+  const [elapsed, setElapsed] = useState(0)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Elapsed timer while scanning
+  useEffect(() => {
+    if (scanning) {
+      setElapsed(0)
+      timerRef.current = setInterval(() => setElapsed(e => e + 1), 1000)
+    } else {
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current) }
+  }, [scanning])
 
   const scan = async () => {
     setScanning(true)
     setResult(null)
-    const resp = await sendRequest(cmd.getWifiList())
+    const resp = await sendRequest(cmd.getWifiList(), SCAN_TIMEOUT_MS)
     setScanning(false)
     if (resp && resp.wifi_list) {
       // Deduplicate by SSID, keeping strongest signal
@@ -42,7 +57,7 @@ export function WifiManager({ open, onClose, currentSSID, sendRequest }: Props) 
     // The robot will disconnect from the current network to join the new one,
     // so the WebSocket will drop and sendRequest will likely time out.
     // Treat both success and timeout as "command sent".
-    const resp = await sendRequest(cmd.connectWifi(connectSSID, password))
+    const resp = await sendRequest(cmd.connectWifi(connectSSID, password), SCAN_TIMEOUT_MS)
     setConnecting(false)
     if (resp && resp.resultCode === 0) {
       setResult(`WiFi command accepted! Robot is switching to ${connectSSID}. You may need to power cycle the robot. Reconnect after it's back online.`)
@@ -79,8 +94,13 @@ export function WifiManager({ open, onClose, currentSSID, sendRequest }: Props) 
             disabled={scanning}
             className="btn-r2 w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded text-xs font-bold disabled:opacity-50"
           >
-            {scanning ? "Scanning..." : "Scan WiFi Networks"}
+            {scanning ? `Scanning... ${elapsed}s` : "Scan WiFi Networks"}
           </button>
+          {scanning && (
+            <div className="text-[9px] text-gray-500 text-center">
+              The robot can take up to 45 seconds to respond
+            </div>
+          )}
 
           {networks.length > 0 && (
             <div className="space-y-1">

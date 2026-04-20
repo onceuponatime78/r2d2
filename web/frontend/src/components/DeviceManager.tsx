@@ -1,13 +1,15 @@
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { cmd } from "@/lib/protocol"
 import type { PairedClient } from "@/lib/protocol"
+
+const REQUEST_TIMEOUT_MS = 45000
 
 interface Props {
   open: boolean
   onClose: () => void
   currentUUID?: string | null
   robotName?: string | null
-  sendRequest: (msg: string) => Promise<Record<string, unknown> | null>
+  sendRequest: (msg: string, timeoutMs?: number) => Promise<Record<string, unknown> | null>
 }
 
 export function DeviceManager({ open, onClose, currentUUID, robotName, sendRequest }: Props) {
@@ -16,11 +18,24 @@ export function DeviceManager({ open, onClose, currentUUID, robotName, sendReque
   const [result, setResult] = useState<string | null>(null)
   const [newName, setNewName] = useState("")
   const [renaming, setRenaming] = useState(false)
+  const [elapsed, setElapsed] = useState(0)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Elapsed timer while loading
+  useEffect(() => {
+    if (loading) {
+      setElapsed(0)
+      timerRef.current = setInterval(() => setElapsed(e => e + 1), 1000)
+    } else {
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current) }
+  }, [loading])
 
   const fetchClients = async () => {
     setLoading(true)
     setResult(null)
-    const resp = await sendRequest(cmd.getPairedList())
+    const resp = await sendRequest(cmd.getPairedList(), REQUEST_TIMEOUT_MS)
     setLoading(false)
     if (resp && resp.clients) {
       setClients(resp.clients as PairedClient[])
@@ -32,7 +47,7 @@ export function DeviceManager({ open, onClose, currentUUID, robotName, sendReque
   const unpairOne = async (uuid: string, name: string) => {
     if (!confirm(`Unpair "${name}" (${uuid.slice(0, 8)}…)?`)) return
     setResult(null)
-    const resp = await sendRequest(cmd.unpair(uuid))
+    const resp = await sendRequest(cmd.unpair(uuid), REQUEST_TIMEOUT_MS)
     if (resp && resp.resultCode === 0) {
       setResult(`Unpaired ${name}`)
       setClients(prev => prev.filter(c => c.uuid !== uuid))
@@ -44,7 +59,7 @@ export function DeviceManager({ open, onClose, currentUUID, robotName, sendReque
   const unpairAll = async () => {
     if (!confirm("Unpair ALL devices? You will need to re-pair to control the robot.")) return
     setResult(null)
-    const resp = await sendRequest(cmd.unpair(null))
+    const resp = await sendRequest(cmd.unpair(null), REQUEST_TIMEOUT_MS)
     if (resp && resp.resultCode === 0) {
       setResult("All devices unpaired")
       setClients([])
@@ -58,7 +73,7 @@ export function DeviceManager({ open, onClose, currentUUID, robotName, sendReque
     if (!trimmed) return
     setRenaming(true)
     setResult(null)
-    const resp = await sendRequest(cmd.changeName(trimmed))
+    const resp = await sendRequest(cmd.changeName(trimmed), REQUEST_TIMEOUT_MS)
     setRenaming(false)
     if (resp && resp.resultCode === 0) {
       setResult(`Renamed robot to "${trimmed}"`)
@@ -109,8 +124,13 @@ export function DeviceManager({ open, onClose, currentUUID, robotName, sendReque
             disabled={loading}
             className="btn-r2 w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded text-xs font-bold disabled:opacity-50"
           >
-            {loading ? "Loading..." : "Load Paired Devices"}
+            {loading ? `Loading... ${elapsed}s` : "Load Paired Devices"}
           </button>
+          {loading && (
+            <div className="text-[9px] text-gray-500 text-center">
+              The robot can take up to 45 seconds to respond
+            </div>
+          )}
 
           {clients.length > 0 && (
             <div className="space-y-1">

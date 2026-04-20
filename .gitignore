@@ -26,6 +26,7 @@ web/backend/static/
 # Go binary outputs
 /r2d2
 /r2d2.exe
+/R2D2.app/
 /dist/
 
 # Secrets / local state
