@@ -4,7 +4,7 @@ Reverse-engineered protocol documentation.
 
 ## Overview
 
-The R2-D2 robot runs an onboard computer (likely Raspberry Pi) with a **Go/Gin HTTP server**. The app communicates over **WiFi** using **WebSockets** for both commands and video. A fallback **Classic Bluetooth SPP** channel also exists.
+The R2-D2 robot runs an onboard computer (Orange Pi Zero) with a **Go/Gin HTTP server**. The app communicates over **WiFi** using **WebSockets** for both commands and video. 
 
 ---
 
@@ -15,7 +15,6 @@ The R2-D2 robot runs an onboard computer (likely Raspberry Pi) with a **Go/Gin H
 | Discovery     | UDP Broadcast           | Port `8090`, address `255.255.255.255` |
 | Control       | WebSocket               | `ws://<robot_ip>:8887`               |
 | Video         | WebSocket (binary)      | `ws://<robot_ip>:12121`              |
-| Fallback      | Classic Bluetooth (SPP) | RFCOMM serial via `createInsecureRfcommSocketToServiceRecord` |
 | Message format| JSON + newline          | All messages are JSON strings terminated with `\n` |
 | Keepalive     | WebSocket ping          | Every 4000ms, connection lost after 20000ms |
 
