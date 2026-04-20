@@ -36,15 +36,17 @@ export default function App() {
 
   const { status, state, send, connect, disconnect, sendRequest } = useRobot({ ip, uuid, onLog: handleLog })
 
-  // Migrate legacy single-UUID storage on first load
+  // Migrate legacy single-UUID storage and sync with server on first load
+  const [robotsReady, setRobotsReady] = useState(false)
   useEffect(() => {
     robots.migrateFromLegacy()
+    robots.initRobots().then(() => setRobotsReady(true))
   }, [])
 
-  // Auto-connect to last known robot on startup
+  // Auto-connect to last known robot on startup (after robots loaded)
   const autoConnectAttempted = useRef(false)
   useEffect(() => {
-    if (autoConnectAttempted.current) return
+    if (!robotsReady || autoConnectAttempted.current) return
     const last = robots.getLastRobot()
     if (last) {
       autoConnectAttempted.current = true
@@ -54,7 +56,7 @@ export default function App() {
       setRobotName(last.saved.name)
       connect(last.saved.ip, last.saved.pairedUuid)
     }
-  }, [connect])
+  }, [connect, robotsReady])
 
   // When gin state updates arrive, persist the robot entry.
   // This handles: updating IP/name if they changed, and replacing legacy placeholder UUIDs

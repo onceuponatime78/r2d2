@@ -4,7 +4,6 @@
 
 export PORT=8099
 export INGRESS_PATH="$(bashio::addon.ingress_entry)"
-export SUPERVISOR_TOKEN="${SUPERVISOR_TOKEN}"
 
 bashio::log.info "Starting R2-D2 Controller on port ${PORT}"
 bashio::log.info "Ingress path: ${INGRESS_PATH}"

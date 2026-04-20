@@ -1,9 +1,10 @@
 # Changelog
 
-## 1.1.3
+## 1.1.4
 
-- Fix run.sh shebang: use `with-contenv bashio` for s6 environment access
-- Fix s6-overlay startup: add `init: false` to prevent tini from stealing PID 1
+- Fix add-on startup: restore CMD in Dockerfile, add hassio_api access
+- Shared robot storage across devices via /api/robots (persists in /data)
+- Remove invalid `init: false` config option
 
 ## 1.1.0
 

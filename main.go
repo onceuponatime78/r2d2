@@ -38,6 +38,9 @@ var ingressPath string
 // proxyMode indicates we're running inside HA (SUPERVISOR_TOKEN present)
 var proxyMode bool
 
+// robotsFile is the path to persistent robot storage
+var robotsFile string
+
 // indexHTML holds the (possibly patched) index.html bytes
 var indexHTML []byte
 
@@ -65,7 +68,10 @@ func main() {
 	if token := os.Getenv("SUPERVISOR_TOKEN"); token != "" {
 		proxyMode = true
 		*noBrowser = true // never auto-open in container
+		robotsFile = "/data/robots.json"
 		log.Println("Running in Home Assistant add-on mode (proxy enabled)")
+	} else {
+		robotsFile = "robots.json"
 	}
 	ingressPath = strings.TrimRight(os.Getenv("INGRESS_PATH"), "/")
 
@@ -87,6 +93,7 @@ func main() {
 	// API routes
 	mux.HandleFunc("/api/discover", handleDiscover)
 	mux.HandleFunc("/api/config", handleConfig)
+	mux.HandleFunc("/api/robots", handleRobots)
 	mux.HandleFunc("/api/ws/control", handleWSControl)
 	mux.HandleFunc("/api/ws/video", handleWSVideo)
 
@@ -191,6 +198,45 @@ func handleDiscover(w http.ResponseWriter, r *http.Request) {
 	robots := discoverRobots()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(robots)
+}
+
+// handleRobots serves GET/PUT for persistent robot storage
+func handleRobots(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		data, err := os.ReadFile(robotsFile)
+		if err != nil {
+			// No file yet — return empty object
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte("{}"))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(data)
+
+	case http.MethodPut:
+		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20)) // 1MB limit
+		if err != nil {
+			http.Error(w, "read error", http.StatusBadRequest)
+			return
+		}
+		// Validate JSON
+		var check map[string]interface{}
+		if err := json.Unmarshal(body, &check); err != nil {
+			http.Error(w, "invalid json", http.StatusBadRequest)
+			return
+		}
+		if err := os.WriteFile(robotsFile, body, 0644); err != nil {
+			log.Printf("Failed to write robots file: %v", err)
+			http.Error(w, "write error", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"ok":true}`))
+
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 // ── WebSocket Proxy ───────────────────────────────────────────────────────────
