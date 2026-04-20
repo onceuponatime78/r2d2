@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.5
+
+- Replace HA base image with plain Alpine — eliminates s6-overlay PID 1 conflict
+- Query Supervisor API directly for ingress path (no more bashio/s6 dependency)
+- Single static Go binary as container entrypoint — no service supervision needed
+
 ## 1.1.4
 
 - Fix add-on startup: restore CMD in Dockerfile, add hassio_api access

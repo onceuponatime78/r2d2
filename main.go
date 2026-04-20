@@ -70,10 +70,17 @@ func main() {
 		*noBrowser = true // never auto-open in container
 		robotsFile = "/data/robots.json"
 		log.Println("Running in Home Assistant add-on mode (proxy enabled)")
+		// Query Supervisor API for ingress entry path
+		if entry, err := fetchIngressEntry(token); err != nil {
+			log.Printf("Warning: could not fetch ingress entry: %v", err)
+		} else {
+			ingressPath = strings.TrimRight(entry, "/")
+			log.Printf("Ingress entry: %s", ingressPath)
+		}
 	} else {
 		robotsFile = "robots.json"
+		ingressPath = strings.TrimRight(os.Getenv("INGRESS_PATH"), "/")
 	}
-	ingressPath = strings.TrimRight(os.Getenv("INGRESS_PATH"), "/")
 
 	// Strip the web/frontend/dist prefix so files serve from /
 	distFS, err := fs.Sub(frontendFS, "web/frontend/dist")
@@ -181,6 +188,33 @@ func ingressStripPrefix(prefix string, next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// fetchIngressEntry queries the HA Supervisor API to get the ingress entry path
+func fetchIngressEntry(token string) (string, error) {
+	client := &http.Client{Timeout: 5 * time.Second}
+	req, err := http.NewRequest("GET", "http://supervisor/addons/self/info", nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("supervisor API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("supervisor API returned %d", resp.StatusCode)
+	}
+	var result struct {
+		Data struct {
+			IngressEntry string `json:"ingress_entry"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("failed to decode supervisor response: %w", err)
+	}
+	return result.Data.IngressEntry, nil
 }
 
 // ── API Handlers ──────────────────────────────────────────────────────────────

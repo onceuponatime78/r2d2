@@ -19,10 +19,8 @@ jobs:
         include:
           - arch: amd64
             platform: linux/amd64
-            base_image: ghcr.io/home-assistant/amd64-base:latest
           - arch: aarch64
             platform: linux/arm64
-            base_image: ghcr.io/home-assistant/aarch64-base:latest
     steps:
       - uses: actions/checkout@v4
 
@@ -49,8 +47,6 @@ jobs:
           file: Dockerfile
           platforms: ${{ matrix.platform }}
           push: true
-          build-args: |
-            BUILD_FROM=${{ matrix.base_image }}
           tags: |
             ${{ env.REGISTRY }}/onceuponatime78/r2d2-addon-${{ matrix.arch }}:${{ steps.version.outputs.version }}
             ${{ env.REGISTRY }}/onceuponatime78/r2d2-addon-${{ matrix.arch }}:latest
