@@ -17,6 +17,6 @@ COPY --from=go-builder /app/r2d2 /usr/bin/r2d2
 COPY r2d2-controller/run.sh /
 RUN chmod a+x /run.sh /usr/bin/r2d2
 
-LABEL io.hass.version="1.1.2" \
+LABEL io.hass.version="1.1.3" \
       io.hass.type="addon" \
       io.hass.arch="aarch64|amd64"

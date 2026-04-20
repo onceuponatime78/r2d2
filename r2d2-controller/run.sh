@@ -1,4 +1,4 @@
-#!/usr/bin/env bashio
+#!/usr/bin/with-contenv bashio
 
 # Home Assistant add-on entrypoint for R2-D2 Controller
 

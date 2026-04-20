@@ -1,7 +1,8 @@
 # Changelog
 
-## 1.1.2
+## 1.1.3
 
+- Fix run.sh shebang: use `with-contenv bashio` for s6 environment access
 - Fix s6-overlay startup: add `init: false` to prevent tini from stealing PID 1
 
 ## 1.1.0
