@@ -188,7 +188,7 @@ export default function App() {
               R2-D2 <span className="text-blue-500">ASTROMECH</span>
             </h1>
             <p className="text-[10px] text-gray-500 uppercase tracking-widest mt-0.5">
-              Control Protocol v1.1.31 Interface
+              Control Interface v1.0
             </p>
           </div>
 
@@ -388,7 +388,7 @@ export default function App() {
       </main>
 
       <footer className="text-center text-[10px] text-gray-700 uppercase tracking-tighter py-8">
-        Astromech Control Interface // Reverse Engineered Protocol // WebSocket Direct
+        Astromech Control Interface v1.0
       </footer>
 
       {/* ── Debug Log Panel ── */}

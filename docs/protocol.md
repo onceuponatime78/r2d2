@@ -1,6 +1,6 @@
-# DeAgostini "Build Your Own R2-D2" - Control Protocol
+# R2-D2 Robot Control Protocol
 
-Reverse-engineered from the Android companion app `com.bullb.r2d2` v1.1.31 (by Bull-B Technology / DeAgostini).
+Reverse-engineered protocol documentation.
 
 ## Overview
 
@@ -21,7 +21,7 @@ The R2-D2 robot runs an onboard computer (likely Raspberry Pi) with a **Go/Gin H
 
 ### Robot UUID
 
-`c8bb5a21-d5ab-458b-ab9a-f5b0c64637ac` - custom robot identification UUID.
+`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` — each robot has a unique identification UUID.
 
 ---
 
@@ -35,8 +35,8 @@ The robot broadcasts its presence on UDP port `8090`:
 {
   "cmd": "updBroadcast",
   "ip": "192.168.x.x",
-  "uuid": "d563e89f-6ab8-4bec-a932-fe5759f7f752",
-  "name": "R2D2-596",
+  "uuid": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "name": "R2D2-XXX",
   "ap_mode": false
 }
 ```
@@ -63,9 +63,9 @@ Robot responds with a `gin` (General Information Notification) containing full s
 {
   "cmd": "gin",
   "robot": {
-    "uuid": "d563e89f-6ab8-4bec-a932-fe5759f7f752",
-    "name": "R2D2-596",
-    "ip": "192.168.3.203",
+    "uuid": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+    "name": "R2D2-XXX",
+    "ip": "192.168.x.x",
     "battery": 100,
     "charging": 0,
     "mute": false,
@@ -77,7 +77,7 @@ Robot responds with a `gin` (General Information Notification) containing full s
     "mode": 1,
     "lcd_s": false,
     "lcd_l": false,
-    "ssid": "intothewild",
+    "ssid": "MyNetwork",
     "ap_mode": false,
     "timestamp": 1776589477751,
     "self_update": 0,

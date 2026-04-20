@@ -78,7 +78,7 @@ func main() {
 	url := fmt.Sprintf("http://localhost:%d", port)
 
 	fmt.Println("┌─────────────────────────────────────────┐")
-	fmt.Println("│  R2-D2 Astromech Control Interface       │")
+	fmt.Println("│  R2-D2 Controller v1.0                  │")
 	fmt.Println("├─────────────────────────────────────────┤")
 	fmt.Printf("│  Server: %-31s│\n", url)
 	fmt.Println("│  Press Ctrl+C to stop                    │")
