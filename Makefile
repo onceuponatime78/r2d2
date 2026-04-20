@@ -85,4 +85,4 @@ addon:
 	docker build \
 		--build-arg BUILD_FROM=ghcr.io/home-assistant/amd64-base:latest \
 		-t r2d2-addon \
-		-f addon/Dockerfile .
+		-f Dockerfile .
