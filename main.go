@@ -5,14 +5,20 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
+	"sync"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 //go:embed all:web/frontend/dist
@@ -24,6 +30,20 @@ type Robot struct {
 	Name   string `json:"name"`
 	IP     string `json:"ip"`
 	APMode bool   `json:"ap_mode"`
+}
+
+// ingressPath is set from the INGRESS_PATH env var (Home Assistant add-on mode)
+var ingressPath string
+
+// proxyMode indicates we're running inside HA (SUPERVISOR_TOKEN present)
+var proxyMode bool
+
+// indexHTML holds the (possibly patched) index.html bytes
+var indexHTML []byte
+
+// upgrader for WebSocket proxy
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
 func main() {
@@ -41,58 +61,130 @@ func main() {
 		port = 8000
 	}
 
+	// Detect Home Assistant add-on mode
+	if token := os.Getenv("SUPERVISOR_TOKEN"); token != "" {
+		proxyMode = true
+		*noBrowser = true // never auto-open in container
+		log.Println("Running in Home Assistant add-on mode (proxy enabled)")
+	}
+	ingressPath = strings.TrimRight(os.Getenv("INGRESS_PATH"), "/")
+
 	// Strip the web/frontend/dist prefix so files serve from /
 	distFS, err := fs.Sub(frontendFS, "web/frontend/dist")
 	if err != nil {
 		log.Fatalf("Failed to access embedded frontend: %v", err)
 	}
 
+	// Read and patch index.html for ingress base path
+	rawIndex, err := fs.ReadFile(distFS, "index.html")
+	if err != nil {
+		log.Fatalf("Failed to read embedded index.html: %v", err)
+	}
+	indexHTML = patchIndexHTML(rawIndex)
+
 	mux := http.NewServeMux()
 
-	// API: robot discovery
+	// API routes
 	mux.HandleFunc("/api/discover", handleDiscover)
+	mux.HandleFunc("/api/config", handleConfig)
+	mux.HandleFunc("/api/ws/control", handleWSControl)
+	mux.HandleFunc("/api/ws/video", handleWSVideo)
 
 	// Static files with SPA fallback
 	fileServer := http.FileServer(http.FS(distFS))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// Try to serve the file directly
 		path := r.URL.Path
 		if path == "/" {
-			fileServer.ServeHTTP(w, r)
+			serveIndex(w)
 			return
 		}
 
 		// Check if file exists in embedded FS
 		f, err := distFS.Open(path[1:]) // strip leading /
 		if err != nil {
-			// File not found — serve index.html for SPA routing
-			r.URL.Path = "/"
-			fileServer.ServeHTTP(w, r)
+			// SPA fallback
+			serveIndex(w)
 			return
 		}
 		f.Close()
 		fileServer.ServeHTTP(w, r)
 	})
 
+	// If ingress path is set, also mount under that prefix
+	var handler http.Handler = mux
+	if ingressPath != "" {
+		handler = ingressStripPrefix(ingressPath, mux)
+	}
+
 	addr := fmt.Sprintf(":%d", port)
-	url := fmt.Sprintf("http://localhost:%d", port)
+	urlStr := fmt.Sprintf("http://localhost:%d", port)
 
 	fmt.Println("┌─────────────────────────────────────────┐")
-	fmt.Println("│  R2-D2 Controller v1.0                  │")
+	fmt.Println("│  R2-D2 Controller v1.1                  │")
 	fmt.Println("├─────────────────────────────────────────┤")
-	fmt.Printf("│  Server: %-31s│\n", url)
+	fmt.Printf("│  Server: %-31s│\n", urlStr)
+	if ingressPath != "" {
+		fmt.Printf("│  Ingress: %-30s│\n", ingressPath)
+	}
+	if proxyMode {
+		fmt.Println("│  Mode: Home Assistant Add-on             │")
+	}
 	fmt.Println("│  Press Ctrl+C to stop                    │")
 	fmt.Println("└─────────────────────────────────────────┘")
 
 	if !*noBrowser {
 		time.AfterFunc(500*time.Millisecond, func() {
-			openBrowser(url)
+			openBrowser(urlStr)
 		})
 	}
 
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	if err := http.ListenAndServe(addr, handler); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
+}
+
+// patchIndexHTML injects a <base> tag when running behind HA ingress
+func patchIndexHTML(raw []byte) []byte {
+	if ingressPath == "" {
+		return raw
+	}
+	base := fmt.Sprintf(`<base href="%s/">`, ingressPath)
+	return []byte(strings.Replace(string(raw), "<head>", "<head>\n    "+base, 1))
+}
+
+func serveIndex(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write(indexHTML)
+}
+
+// ingressStripPrefix strips the ingress path prefix so routes work normally
+func ingressStripPrefix(prefix string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, prefix) {
+			r2 := new(http.Request)
+			*r2 = *r
+			r2.URL = new(url.URL)
+			*r2.URL = *r.URL
+			r2.URL.Path = strings.TrimPrefix(r.URL.Path, prefix)
+			if r2.URL.Path == "" {
+				r2.URL.Path = "/"
+			}
+			next.ServeHTTP(w, r2)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// ── API Handlers ──────────────────────────────────────────────────────────────
+
+func handleConfig(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"proxy":       proxyMode,
+		"ingressPath": ingressPath,
+		"version":     "1.1.0",
+	})
 }
 
 func handleDiscover(w http.ResponseWriter, r *http.Request) {
@@ -100,6 +192,127 @@ func handleDiscover(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(robots)
 }
+
+// ── WebSocket Proxy ───────────────────────────────────────────────────────────
+
+// handleWSControl proxies browser WS ↔ robot control WS (port 8887)
+func handleWSControl(w http.ResponseWriter, r *http.Request) {
+	robotIP := r.URL.Query().Get("ip")
+	if robotIP == "" {
+		http.Error(w, "missing ip parameter", http.StatusBadRequest)
+		return
+	}
+	if !isValidIP(robotIP) {
+		http.Error(w, "invalid ip parameter", http.StatusBadRequest)
+		return
+	}
+
+	// Upgrade browser connection
+	clientConn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("WS proxy control: upgrade failed: %v", err)
+		return
+	}
+	defer clientConn.Close()
+
+	// Connect to robot
+	robotURL := fmt.Sprintf("ws://%s:8887", robotIP)
+	robotConn, _, err := websocket.DefaultDialer.Dial(robotURL, nil)
+	if err != nil {
+		log.Printf("WS proxy control: robot dial failed: %v", err)
+		clientConn.WriteMessage(websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.CloseInternalServerErr, "robot unreachable"))
+		return
+	}
+	defer robotConn.Close()
+
+	log.Printf("WS proxy control: connected to %s", robotIP)
+	proxyWebSocket(clientConn, robotConn)
+}
+
+// handleWSVideo proxies browser WS ↔ robot video WS (port 12121)
+func handleWSVideo(w http.ResponseWriter, r *http.Request) {
+	robotIP := r.URL.Query().Get("ip")
+	if robotIP == "" {
+		http.Error(w, "missing ip parameter", http.StatusBadRequest)
+		return
+	}
+	if !isValidIP(robotIP) {
+		http.Error(w, "invalid ip parameter", http.StatusBadRequest)
+		return
+	}
+
+	clientConn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("WS proxy video: upgrade failed: %v", err)
+		return
+	}
+	defer clientConn.Close()
+
+	robotURL := fmt.Sprintf("ws://%s:12121", robotIP)
+	robotConn, _, err := websocket.DefaultDialer.Dial(robotURL, nil)
+	if err != nil {
+		log.Printf("WS proxy video: robot dial failed: %v", err)
+		clientConn.WriteMessage(websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.CloseInternalServerErr, "robot unreachable"))
+		return
+	}
+	defer robotConn.Close()
+
+	log.Printf("WS proxy video: connected to %s", robotIP)
+	proxyWebSocket(clientConn, robotConn)
+}
+
+// proxyWebSocket does bidirectional frame-level relay between two WebSocket connections
+func proxyWebSocket(client, robot *websocket.Conn) {
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// client → robot
+	go func() {
+		defer wg.Done()
+		relay(client, robot)
+		robot.WriteMessage(websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+	}()
+
+	// robot → client
+	go func() {
+		defer wg.Done()
+		relay(robot, client)
+		client.WriteMessage(websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+	}()
+
+	wg.Wait()
+}
+
+// relay copies WebSocket frames from src to dst
+func relay(src, dst *websocket.Conn) {
+	for {
+		msgType, reader, err := src.NextReader()
+		if err != nil {
+			return
+		}
+		writer, err := dst.NextWriter(msgType)
+		if err != nil {
+			return
+		}
+		if _, err := io.Copy(writer, reader); err != nil {
+			writer.Close()
+			return
+		}
+		writer.Close()
+	}
+}
+
+// isValidIP checks that the parameter is a valid IPv4 address
+func isValidIP(s string) bool {
+	ip := net.ParseIP(s)
+	return ip != nil && ip.To4() != nil
+}
+
+// ── Discovery ─────────────────────────────────────────────────────────────────
 
 func discoverRobots() []Robot {
 	const (
@@ -117,19 +330,16 @@ func discoverRobots() []Robot {
 
 	conn.SetReadDeadline(time.Now().Add(listenTimeout))
 
-	// Collect our own IPs to filter echo
 	ownIPs := getOwnIPs()
-
 	found := make(map[string]Robot)
 	buf := make([]byte, 4096)
 
 	for {
 		n, remoteAddr, err := conn.ReadFromUDP(buf)
 		if err != nil {
-			break // timeout or error
+			break
 		}
 
-		// Skip our own broadcasts
 		if _, ok := ownIPs[remoteAddr.IP.String()]; ok {
 			continue
 		}
@@ -179,7 +389,6 @@ func discoverRobots() []Robot {
 func getOwnIPs() map[string]struct{} {
 	ips := make(map[string]struct{})
 
-	// Method 1: dial out to find primary IP
 	conn, err := net.Dial("udp4", "8.8.8.8:80")
 	if err == nil {
 		if addr, ok := conn.LocalAddr().(*net.UDPAddr); ok {
@@ -188,7 +397,6 @@ func getOwnIPs() map[string]struct{} {
 		conn.Close()
 	}
 
-	// Method 2: enumerate interfaces
 	addrs, err := net.InterfaceAddrs()
 	if err == nil {
 		for _, a := range addrs {

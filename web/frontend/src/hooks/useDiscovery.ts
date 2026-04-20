@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { DiscoveredRobot } from "@/lib/protocol"
+import { getBaseUrl } from "@/lib/utils"
 
 export function useDiscovery() {
   const [robots, setRobots] = useState<DiscoveredRobot[]>([])
@@ -9,7 +10,7 @@ export function useDiscovery() {
   const scan = useCallback(async () => {
     setScanning(true)
     try {
-      const res = await fetch("/api/discover")
+      const res = await fetch(getBaseUrl() + "/api/discover")
       if (res.ok) {
         const data = await res.json()
         setRobots(data)

@@ -1,4 +1,4 @@
-.PHONY: build frontend release app dev dev-frontend clean
+.PHONY: build frontend release app addon dev dev-frontend clean
 
 # Build frontend then compile Go binary
 build: frontend
@@ -79,3 +79,10 @@ clean:
 	rm -rf dist/
 	rm -rf R2D2.app
 	rm -rf web/frontend/dist
+
+# Home Assistant add-on: build Docker image locally for testing
+addon:
+	docker build \
+		--build-arg BUILD_FROM=ghcr.io/home-assistant/amd64-base:latest \
+		-t r2d2-addon \
+		-f addon/Dockerfile .

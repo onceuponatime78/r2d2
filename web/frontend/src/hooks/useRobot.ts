@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { cmd, MODE, type RobotState } from "@/lib/protocol"
+import { getServerConfig, buildWsUrl } from "@/lib/utils"
 
 export type ConnectionStatus = "disconnected" | "connecting" | "connected" | "error"
 
@@ -47,6 +48,13 @@ export function useRobot({ ip, uuid, deviceName = "R2D2-WebUI", onLog }: UseRobo
   const lastModeSendRef = useRef<number>(0)
   // Pending request-response callbacks keyed by cmd name
   const pendingRef = useRef<Map<string, (data: Record<string, unknown>) => void>>(new Map())
+
+  // Ref to track whether proxy mode is available
+  const proxyRef = useRef<boolean>(false)
+  // Fetch server config once
+  useEffect(() => {
+    getServerConfig().then(cfg => { proxyRef.current = cfg.proxy })
+  }, [])
 
   const log = (msg: string, level: "info" | "warn" = "info") => {
     const ts = new Date().toISOString().slice(11, 23) // HH:MM:SS.mmm
@@ -146,9 +154,14 @@ export function useRobot({ ip, uuid, deviceName = "R2D2-WebUI", onLog }: UseRobo
     oldWs?.close()
 
     updateStatus("connecting")
-    log(`Connecting to ws://${targetIp}:8887`)
 
-    const ws = new WebSocket(`ws://${targetIp}:8887`)
+    // Build WebSocket URL — proxy through server or direct to robot
+    const wsUrl = proxyRef.current
+      ? buildWsUrl(`/api/ws/control?ip=${targetIp}`)
+      : `ws://${targetIp}:8887`
+    log(`Connecting to ${wsUrl}`)
+
+    const ws = new WebSocket(wsUrl)
     wsRef.current = ws
 
     ws.onopen = () => {

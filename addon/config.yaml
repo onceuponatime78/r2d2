@@ -1,0 +1,17 @@
+name: "R2-D2 Controller"
+description: "Web control interface for the DeAgostini R2-D2 Astromech droid"
+version: "1.1.0"
+slug: "r2d2-controller"
+url: "https://github.com/onceuponatime78/r2d2"
+arch:
+  - amd64
+  - aarch64
+ingress: true
+ingress_port: 8099
+panel_icon: "mdi:robot"
+panel_title: "R2-D2"
+startup: application
+boot: auto
+host_network: true
+options: {}
+schema: {}
