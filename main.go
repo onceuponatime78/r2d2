@@ -224,7 +224,7 @@ func handleConfig(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"proxy":       proxyMode,
 		"ingressPath": ingressPath,
-		"version":     "1.1.0",
+		"version":     "1.1.6",
 	})
 }
 

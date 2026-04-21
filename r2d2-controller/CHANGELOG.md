@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.6
+
+- Fix white screen in HA ingress: use relative asset paths (`base: './'`) so `<base>` tag resolves correctly
+
 ## 1.1.5
 
 - Replace HA base image with plain Alpine — eliminates s6-overlay PID 1 conflict
