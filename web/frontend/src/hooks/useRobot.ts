@@ -49,12 +49,7 @@ export function useRobot({ ip, uuid, deviceName = "R2D2-WebUI", onLog }: UseRobo
   // Pending request-response callbacks keyed by cmd name
   const pendingRef = useRef<Map<string, (data: Record<string, unknown>) => void>>(new Map())
 
-  // Ref to track whether proxy mode is available
-  const proxyRef = useRef<boolean>(false)
-  // Fetch server config once
-  useEffect(() => {
-    getServerConfig().then(cfg => { proxyRef.current = cfg.proxy })
-  }, [])
+  // No longer need proxyRef — connectNow awaits getServerConfig() directly
 
   const log = (msg: string, level: "info" | "warn" = "info") => {
     const ts = new Date().toISOString().slice(11, 23) // HH:MM:SS.mmm
@@ -144,7 +139,7 @@ export function useRobot({ ip, uuid, deviceName = "R2D2-WebUI", onLog }: UseRobo
     })
   }, [])
 
-  const connectNow = useCallback((targetIp: string, targetUuid: string) => {
+  const connectNow = useCallback(async (targetIp: string, targetUuid: string) => {
     stopHeartbeat()
     stopReconnect()
     // Clear ref BEFORE closing so the old socket's onclose sees wsRef !== itself
@@ -155,11 +150,13 @@ export function useRobot({ ip, uuid, deviceName = "R2D2-WebUI", onLog }: UseRobo
 
     updateStatus("connecting")
 
+    // Await server config to determine proxy mode (cached after first call)
+    const cfg = await getServerConfig()
     // Build WebSocket URL — proxy through server or direct to robot
-    const wsUrl = proxyRef.current
+    const wsUrl = cfg.proxy
       ? buildWsUrl(`/api/ws/control?ip=${targetIp}`)
       : `ws://${targetIp}:8887`
-    log(`Connecting to ${wsUrl}`)
+    log(`Connecting to ${wsUrl} (proxy=${cfg.proxy})`)
 
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws

@@ -3,7 +3,7 @@ import type { DiscoveredRobot } from "@/lib/protocol"
 import { cmd } from "@/lib/protocol"
 import { useDiscovery } from "@/hooks/useDiscovery"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Loader2, Radio, Wifi } from "lucide-react"
+import { Loader2, Radio, Wifi, Download, Copy, Check } from "lucide-react"
 import * as robots from "@/lib/robots"
 
 const AP_IP = "192.168.43.1"
@@ -24,6 +24,11 @@ export function ConnectionDialog({ open, onClose, onConnect, onManualConnect, on
   const [apStatus, setApStatus] = useState<"idle" | "pairing" | "success" | "error">("idle")
   const [apMessage, setApMessage] = useState("")
   const apWsRef = useRef<WebSocket | null>(null)
+  const [showImport, setShowImport] = useState(false)
+  const [importText, setImportText] = useState("")
+  const [importStatus, setImportStatus] = useState<"idle" | "success" | "error">("idle")
+  const [importMessage, setImportMessage] = useState("")
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     if (open) startPolling()
@@ -35,6 +40,11 @@ export function ConnectionDialog({ open, onClose, onConnect, onManualConnect, on
       setApMessage("")
       apWsRef.current?.close()
       apWsRef.current = null
+      // Reset import state
+      setShowImport(false)
+      setImportText("")
+      setImportStatus("idle")
+      setImportMessage("")
     }
   }, [open, startPolling, stopPolling])
 
@@ -178,6 +188,105 @@ export function ConnectionDialog({ open, onClose, onConnect, onManualConnect, on
                 Connect
               </button>
             </div>
+          </div>
+
+          {/* Import / Export Pairing */}
+          <div className="border-t border-white/10 pt-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-gray-500 uppercase tracking-wider">Transfer Pairing</span>
+            </div>
+
+            {!showImport ? (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    const all = robots.getAllRobots()
+                    const entries = Object.entries(all)
+                    if (entries.length === 0) {
+                      setCopied(false)
+                      return
+                    }
+                    const exportData = entries.map(([robotUuid, r]) => ({
+                      robotUuid,
+                      pairedUuid: r.pairedUuid,
+                      name: r.name,
+                      ip: r.ip,
+                    }))
+                    navigator.clipboard.writeText(JSON.stringify(exportData, null, 2))
+                    setCopied(true)
+                    setTimeout(() => setCopied(false), 2000)
+                  }}
+                  className="btn-r2 flex-1 flex items-center justify-center gap-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 py-2 rounded text-xs"
+                >
+                  {copied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
+                  {copied ? "Copied!" : "Export"}
+                </button>
+                <button
+                  onClick={() => setShowImport(true)}
+                  className="btn-r2 flex-1 flex items-center justify-center gap-1.5 bg-blue-900/40 hover:bg-blue-900/60 border border-blue-700/50 text-blue-400 py-2 rounded text-xs font-bold"
+                >
+                  <Download className="h-3 w-3" />
+                  Import
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <textarea
+                  value={importText}
+                  onChange={(e) => setImportText(e.target.value)}
+                  placeholder='Paste exported pairing JSON here...'
+                  rows={3}
+                  className="w-full rounded border border-white/10 bg-black/40 px-3 py-2 text-[10px] text-white placeholder:text-gray-600 focus:outline-none focus:border-blue-500 font-mono resize-none"
+                />
+                {importStatus === "success" && (
+                  <div className="text-[10px] p-2 rounded bg-green-900/30 text-green-400">{importMessage}</div>
+                )}
+                {importStatus === "error" && (
+                  <div className="text-[10px] p-2 rounded bg-red-900/30 text-red-400">{importMessage}</div>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      try {
+                        let parsed = JSON.parse(importText.trim())
+                        // Support both single object and array
+                        if (!Array.isArray(parsed)) parsed = [parsed]
+                        let count = 0
+                        for (const entry of parsed) {
+                          if (!entry.robotUuid || !entry.pairedUuid) {
+                            setImportStatus("error")
+                            setImportMessage("Invalid format: missing robotUuid or pairedUuid")
+                            return
+                          }
+                          robots.saveRobot(entry.robotUuid, {
+                            pairedUuid: entry.pairedUuid,
+                            name: entry.name || "R2-D2",
+                            ip: entry.ip || "",
+                          })
+                          count++
+                        }
+                        setImportStatus("success")
+                        setImportMessage(`Imported ${count} robot${count > 1 ? "s" : ""}. You can now connect.`)
+                        setImportText("")
+                      } catch {
+                        setImportStatus("error")
+                        setImportMessage("Invalid JSON. Paste the exported pairing data.")
+                      }
+                    }}
+                    disabled={!importText.trim()}
+                    className="btn-r2 flex-1 bg-blue-700 hover:bg-blue-600 disabled:opacity-30 text-white py-1.5 rounded text-[10px] font-bold"
+                  >
+                    Import
+                  </button>
+                  <button
+                    onClick={() => { setShowImport(false); setImportStatus("idle"); setImportMessage(""); setImportText("") }}
+                    className="btn-r2 bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1.5 rounded text-[10px]"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* AP Mode Pairing */}
