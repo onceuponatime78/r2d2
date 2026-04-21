@@ -31,6 +31,7 @@ web/backend/static/
 
 # Secrets / local state
 scripts/.r2d2_uuid
+robots.json
 
 # APK decompilation artifacts (large, not source)
 orgapk/
