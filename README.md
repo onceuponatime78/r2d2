@@ -1,4 +1,4 @@
-# R2-D2 Web Controller v1.1
+# R2-D2 Web Controller v1.1.7
 
 A locally-hosted web application to control the DeAgostini "Build Your Own R2-D2" robot. Single binary, zero dependencies, runs on macOS, Linux, and Windows — or as a Home Assistant add-on.
 
@@ -40,6 +40,15 @@ Or manually:
 4. Start the add-on — it appears in the sidebar as "R2-D2"
 
 The add-on proxies all WebSocket traffic through the server, so you can control your R2-D2 **remotely** via Nabu Casa or other HA remote access methods.
+
+> **Note:** The robot rejects connection attempts from unknown/unpaired devices. Since HA typically runs on a separate machine (VM, Raspberry Pi, etc.) that can't join the robot's WiFi AP for initial pairing, you need to **pair using the standalone app first**, then transfer the credentials to HA.
+
+### Pairing Workflow for Home Assistant
+
+1. **Pair on your laptop/desktop** — Run the standalone binary, connect to the robot's AP WiFi, and use "Pair New Robot (AP Mode)" in the connection dialog
+2. **Export pairing** — In the connection dialog, click **Export** to copy the pairing credentials to your clipboard
+3. **Import into HA** — Open the R2-D2 add-on in Home Assistant, open the connection dialog, click **Import**, paste the credentials, and click Import
+4. **Connect** — Enter the robot's IP address (or wait for discovery) and connect. The robot will accept the connection using the imported credentials
 
 ## Building from Source
 
